@@ -41,6 +41,7 @@ class LSTMCRF(nn.Module):
         return loss
 
     def decode(self, inputs, inputs_length, inputs_mask):
-        outputs = self.bi_lstm(inputs, inputs_length)
+        emissions = self.bi_lstm(inputs, inputs_length)
 
-        return tgts
+        return self.crf.decode(emissions, inputs_mask)
+        

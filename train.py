@@ -18,6 +18,9 @@ import numpy as np
 import torch
 import torch.optim as optim
 
+from sklearn.metrics import accuracy_score
+from sklearn.metrics import f1_score
+
 from dataset import build_vocab
 from dataset import get_iterators
 from config import VocabConfig, ModelConfig, TrainConfig
@@ -30,7 +33,6 @@ parser.add_argument('input_file', help='processed input file, each line has two 
 args = parser.parse_args()
 
 train_iterator, valid_iterator, test_iterator = get_iterators(args.input_file)
-print('train_iterator: ', train_iterator)
 
 build_vocab(train_iterator.dataset)
 
@@ -44,7 +46,9 @@ tgt_size = len(tgt_vocab.stoi)
 
 print('src_size: ', src_size)
 print('tgt_size: ', tgt_size)
-print('src pad: ', src_vocab.stoi[VocabConfig.PAD])
+
+tgt_pad_idx = tgt_vocab.stoi[VocabConfig.PAD]
+#print('src pad: ', src_vocab.stoi[VocabConfig.PAD])
 print('tgt pad: ', tgt_vocab.stoi[VocabConfig.PAD])
 
 def build_model():
@@ -70,17 +74,21 @@ def epochs():
     for epoch in range(1, TrainConfig.epochs + 1):
         print('[ Epoch', epoch, ']')
 
+        '''
+
         start = time.time()
         train_loss = train_epoch(epoch)
 
-        print(' (Training)   loss: {ppl: 8.5f}, elapse: {elapse:3.3f} min'.format(
+        print(' (Training)   loss: {loss: 8.5f}, elapse: {elapse:3.3f} min'.format(
                     loss=train_loss,
                     elapse=(time.time()-start)/60))
+        '''
 
         start = time.time()
-        valid_accu = valid_epoch(epoch)
-        print(' (Validation) accuracy: {accu:3.3f} %, '
+        valid_accu, valid_loss = valid_epoch(epoch)
+        print(' (Validation) loss: {loss: 8.5f}, accuracy: {accu:3.3f} %, '
                 'elapse: {elapse:3.3f} min'.format(
+                    loss=valid_loss,
                     accu=100*valid_accu,
                     elapse=(time.time()-start)/60)
                 )
@@ -111,8 +119,8 @@ def train_epoch(epoch):
         loss = -model(inputs, inputs_length, inputs_mask, tgts)
         #print('loss: ', loss)
 
-        if i % 50 == 0:
-            print('loss: ', loss.item())
+        #if i % 50 == 0:
+        #    print('loss: ', loss.item())
 
         total_loss += loss.item()
 
@@ -123,14 +131,77 @@ def train_epoch(epoch):
 
     return total_loss / len(train_iterator)
 
-def valid_epoch():
+def valid_epoch(epoch):
     model.eval()
 
+    total_loss = 0
+    total_acc = 0
     with torch.no_grad():
-        for batch in tqdm(valid_iterator, mininterval=2,
+        for i, batch in tqdm(enumerate(valid_iterator), mininterval=2,
                 desc=' (Validation: %d) ' % epoch, leave=False):
-            pass
 
+            (inputs, inputs_length), tgts = batch
+            #print('inputs: ', inputs.shape)
+            #print('tgts: ', tgts.shape)
+            inputs_mask = torch.arange(0, inputs.shape[0]).long() \
+                                .repeat(TrainConfig.batch_size, 1) \
+                                .lt(inputs_length.unsqueeze(1)) \
+                                .T \
+                                .to(TrainConfig.device)
+
+            loss = -model(inputs, inputs_length, inputs_mask, tgts)
+            #print('loss: ', loss)
+            total_loss += loss.item()
+
+            # List[List[int]], [batch_size, seq_len]
+            pred_tgts = model.decode(inputs, inputs_length, inputs_mask)
+
+            accu = call_performace(tgts.T.tolist(), pred_tgts, inputs_length.tolist())
+            total_acc += accu
+
+    return total_acc / len(valid_iterator), total_loss / len(valid_iterator)
+
+
+def test():
+    model.eval()
+
+    total_acc = 0
+    with torch.no_grad():
+        for i, batch in tqdm(enumerate(valid_iterator), mininterval=2,
+                desc=' (Validation: %d) ' % epoch, leave=False):
+
+            (inputs, inputs_length), tgts = batch
+            inputs_mask = torch.arange(0, inputs.shape[0]).long() \
+                                .repeat(TrainConfig.batch_size, 1) \
+                                .lt(inputs_length.unsqueeze(1)) \
+                                .T \
+                                .to(TrainConfig.device)
+
+            # List[List[int]], [batch_size, seq_len]
+            pred_tgts = model.decode(inputs, inputs_length, inputs_mask)
+            #pred_tgts = torch.LongTensor(pred_tgts).to(TrainConfig.device)
+
+            accu = call_performace(tgts.T.tolist(), pred_tgts, inputs_length.tolist())
+            total_acc += accu
+
+    return total_acc / len(valid_iterator)
+
+def call_performace(gold, pred, lens):
+    '''
+    gold: List[List[int]]
+    pred: List[List[int]], removed pad
+    '''
+    tmp_gold, tmp_pred = list(), list()
+
+    for i, l in enumerate(lens):
+        assert(len(pred[i]) == l)
+
+        tmp_gold.extend(gold[i][:l])
+        tmp_pred.extend(pred[i])
+
+    accu = accuracy_score(tmp_gold, tmp_pred)
+
+    return accu
 
 if __name__ == '__main__':
     epochs()

@@ -33,7 +33,7 @@ class TrainConfig:
     model = 'lstm'
     device = 'cpu'
     batch_size = 64
-    split_ratio = [0.8, 0.1, 0.1]
+    split_ratio = [0.7, 0.2, 0.1]
     lr = 0.001
     epochs = 50
 
