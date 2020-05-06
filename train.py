@@ -74,15 +74,12 @@ def epochs():
     for epoch in range(1, TrainConfig.epochs + 1):
         print('[ Epoch', epoch, ']')
 
-        '''
-
         start = time.time()
         train_loss = train_epoch(epoch)
 
         print(' (Training)   loss: {loss: 8.5f}, elapse: {elapse:3.3f} min'.format(
                     loss=train_loss,
                     elapse=(time.time()-start)/60))
-        '''
 
         start = time.time()
         valid_accu, valid_loss = valid_epoch(epoch)
@@ -90,8 +87,14 @@ def epochs():
                 'elapse: {elapse:3.3f} min'.format(
                     loss=valid_loss,
                     accu=100*valid_accu,
-                    elapse=(time.time()-start)/60)
-                )
+                    elapse=(time.time()-start)/60))
+
+        start = time.time()
+        test_accu = test(epoch)
+        print(' (Test) accuracy: {accu:3.3f} %, '
+                'elapse: {elapse:3.3f} min'.format(
+                    accu=100*test_accu,
+                    elapse=(time.time()-start)/60))
 
 def train_epoch(epoch):
     model.train()
@@ -162,13 +165,13 @@ def valid_epoch(epoch):
     return total_acc / len(valid_iterator), total_loss / len(valid_iterator)
 
 
-def test():
+def test(epoch):
     model.eval()
 
     total_acc = 0
     with torch.no_grad():
-        for i, batch in tqdm(enumerate(valid_iterator), mininterval=2,
-                desc=' (Validation: %d) ' % epoch, leave=False):
+        for i, batch in tqdm(enumerate(test_iterator), mininterval=2,
+                desc=' (Teste: %d) ' % epoch, leave=False):
 
             (inputs, inputs_length), tgts = batch
             inputs_mask = torch.arange(0, inputs.shape[0]).long() \
@@ -184,7 +187,7 @@ def test():
             accu = call_performace(tgts.T.tolist(), pred_tgts, inputs_length.tolist())
             total_acc += accu
 
-    return total_acc / len(valid_iterator)
+    return total_acc / len(test_iterator)
 
 def call_performace(gold, pred, lens):
     '''
