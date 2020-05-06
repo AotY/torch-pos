@@ -1,0 +1,22 @@
+### Python
+
+.DS_Store
+.ropeproject
+
+*.pyc
+__pycache__
+
+
+
+### Data
+data/*.txt
+
+# data/*.dist
+
+
+### log
+log/
+
+### models
+models/
+*.pth
